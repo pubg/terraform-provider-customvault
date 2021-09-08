@@ -5,14 +5,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/iam"
-	"github.com/aws/aws-sdk-go/service/sts"
-	"github.com/hashicorp/go-cleanhttp"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 	"github.com/hashicorp/vault/api"
 )
@@ -153,13 +145,6 @@ func awsAccessCredentialsDataSourceRead(d *schema.ResourceData, meta interface{}
 		return fmt.Errorf("no role found at path %q", path)
 	}
 
-	accessKey := secret.Data["access_key"].(string)
-	secretKey := secret.Data["secret_key"].(string)
-	var securityToken string
-	if secret.Data["security_token"] != nil {
-		securityToken = secret.Data["security_token"].(string)
-	}
-
 	d.SetId(secret.LeaseID)
 	d.Set("access_key", secret.Data["access_key"])
 	d.Set("secret_key", secret.Data["secret_key"])
@@ -169,85 +154,7 @@ func awsAccessCredentialsDataSourceRead(d *schema.ResourceData, meta interface{}
 	d.Set("lease_start_time", time.Now().Format(time.RFC3339))
 	d.Set("lease_renewable", secret.Renewable)
 
-	awsConfig := &aws.Config{
-		Credentials: credentials.NewStaticCredentials(accessKey, secretKey, securityToken),
-		HTTPClient:  cleanhttp.DefaultClient(),
-	}
-
-	region := d.Get("region").(string)
-	if region != "" {
-		awsConfig.Region = &region
-	}
-
-	sess, err := session.NewSession(awsConfig)
-	if err != nil {
-		return fmt.Errorf("error creating AWS session: %s", err)
-	}
-
-	iamconn := iam.New(sess)
-	stsconn := sts.New(sess)
-
-	// Different types of AWS credentials have different behavior around consistency.
-	// See https://www.vaultproject.io/docs/secrets/aws/index.html#usage for more.
-	if credType == "sts" {
-		// STS credentials are immediately consistent. Let's ensure they're working.
-		log.Printf("[DEBUG] Checking if AWS sts token %q is valid", secret.LeaseID)
-		if _, err := stsconn.GetCallerIdentity(&sts.GetCallerIdentityInput{}); err != nil {
-			return err
-		}
-		return nil
-	}
-
-	// Other types of credentials are eventually consistent. Let's check credential
-	// validity and slow down to give credentials time to propagate before we return
-	// them. We'll wait for at least 5 sequential successes before giving creds back
-	// to the user.
-	sequentialSuccesses := 0
-
-	// validateCreds is a retry function, which will be retried until it succeeds.
-	validateCreds := func() *resource.RetryError {
-		log.Printf("[DEBUG] Checking if AWS creds %q are valid", secret.LeaseID)
-		if _, err := iamconn.GetUser(nil); err != nil && isAWSAuthError(err) {
-			sequentialSuccesses = 0
-			log.Printf("[DEBUG] AWS auth error checking if creds %q are valid, is retryable", secret.LeaseID)
-			return resource.RetryableError(err)
-		} else if err != nil {
-			log.Printf("[DEBUG] Error checking if creds %q are valid: %s", secret.LeaseID, err)
-			return resource.NonRetryableError(err)
-		}
-		sequentialSuccesses++
-		log.Printf("[DEBUG] Checked if AWS creds %q are valid", secret.LeaseID)
-		return nil
-	}
-
-	start := time.Now()
-	for sequentialSuccesses < sequentialSuccessesRequired {
-		if time.Since(start) > sequentialSuccessTimeLimit {
-			return fmt.Errorf("unable to get %d sequential successes within %.f seconds", sequentialSuccessesRequired, sequentialSuccessTimeLimit.Seconds())
-		}
-		if err := resource.Retry(retryTimeOut, validateCreds); err != nil {
-			return fmt.Errorf("error checking if credentials are valid: %s", err)
-		}
-	}
-
 	log.Printf("[DEBUG] Waiting an additional %.f seconds for new credentials to propagate...", propagationBuffer.Seconds())
 	time.Sleep(propagationBuffer)
 	return nil
-}
-
-func isAWSAuthError(err error) bool {
-	awsErr, ok := err.(awserr.Error)
-	if !ok {
-		return false
-	}
-	switch awsErr.Code() {
-	case "AccessDenied":
-		return true
-	case "ValidationError":
-		return true
-	case "InvalidClientTokenId":
-		return true
-	default:
-		return false
-	}
 }
