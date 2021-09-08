@@ -5,7 +5,7 @@ on:
       - 'v*'
 jobs:
   goreleaser:
-    runs-on: ["self-hosted", "linux", "DevOps"]
+    runs-on: ["self-hosted", "Linux", "DevOps", "devops-plain"]
     steps:
       - name: Checkout
         uses: actions/checkout@v2
