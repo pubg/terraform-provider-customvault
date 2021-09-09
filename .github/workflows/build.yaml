@@ -1,11 +1,10 @@
-name: internal-build
+name: build
 on:
   push:
     tags:
       - 'v*'
 jobs:
   goreleaser:
-    runs-on: ["self-hosted", "Linux", "DevOps", "devops-plain"]
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -14,7 +13,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v2
         with:
-          go-version: 1.16
+          go-version: 1.17
       - name: Import GPG key
         id: import_gpg
         uses: hashicorp/ghaction-import-gpg@v2.1.0
@@ -30,4 +29,4 @@ jobs:
         env:
           GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
           # GitHub sets this automatically
-          GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
+#          GITHUB_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
