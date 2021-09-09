@@ -22,7 +22,7 @@ for more details.
 
 ```hcl
 # generally, these blocks would be in a different module
-data "vault_tencent_access_credentials" "creds" {
+data "customvault_tencent_access_credentials" "creds" {
   backend = "tencent/"
   role    = "terraform-provisioner"
 }

@@ -212,7 +212,7 @@ type Description struct {
 
 var (
 	DataSourceRegistry = map[string]*Description{
-		"vault_tencent_access_credentials": {
+		"customvault_tencent_access_credentials": {
 			Resource:      tencentAccessCredentialsDataSource(),
 			PathInventory: []string{"/tencentsecrets/creds"},
 		},
