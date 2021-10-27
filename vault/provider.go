@@ -3,6 +3,7 @@ package vault
 import (
 	"errors"
 	"fmt"
+	"github.com/hashicorp/terraform-provider-vault/util"
 	"log"
 	"net/http"
 	"os"
@@ -102,6 +103,11 @@ func Provider() *schema.Provider {
 							Elem: &schema.Schema{
 								Type: schema.TypeString,
 							},
+						},
+						"replace_env": {
+							Type: schema.TypeBool,
+							Optional: true,
+							Default: false,
 						},
 						"method": {
 							Type:     schema.TypeString,
@@ -321,32 +327,41 @@ func providerConfigure(d *schema.ResourceData) (interface{}, error) {
 
 	// Attempt to use auth/<mount>login if 'auth_login' is provided in provider config
 	authLoginI := d.Get("auth_login").([]interface{})
-	if len(authLoginI) > 1 {
-		return "", fmt.Errorf("auth_login block may appear only once")
-	}
-
-	if len(authLoginI) == 1 {
-		authLogin := authLoginI[0].(map[string]interface{})
-		authLoginPath := authLogin["path"].(string)
-		authLoginNamespace := ""
-		if authLoginNamespaceI, ok := authLogin["namespace"]; ok {
-			authLoginNamespace = authLoginNamespaceI.(string)
-			client.SetNamespace(authLoginNamespace)
-		}
-		authLoginParameters := authLogin["parameters"].(map[string]interface{})
-
-		method := authLogin["method"].(string)
-		if method == "aws" {
-			if err := signAWSLogin(authLoginParameters); err != nil {
-				return nil, fmt.Errorf("error signing AWS login request: %s", err)
+	if len(authLoginI) >= 1 {
+		var errs []error
+		for _, rawAuthLogin := range authLoginI {
+			authLogin := rawAuthLogin.(map[string]interface{})
+			authLoginPath := authLogin["path"].(string)
+			authLoginNamespace := ""
+			if authLoginNamespaceI, ok := authLogin["namespace"]; ok {
+				authLoginNamespace = authLoginNamespaceI.(string)
+				client.SetNamespace(authLoginNamespace)
 			}
-		}
+			authLoginParameters := authLogin["parameters"].(map[string]interface{})
 
-		secret, err := client.Logical().Write(authLoginPath, authLoginParameters)
-		if err != nil {
-			return nil, err
+			if authLogin["replace_env"].(bool) {
+				util.ReplaceEnvVar(authLoginParameters, "env.")
+			}
+
+			method := authLogin["method"].(string)
+			if method == "aws" {
+				if err := signAWSLogin(authLoginParameters); err != nil {
+					errs = append(errs, fmt.Errorf("error signing AWS login request: %s", err))
+					continue
+				}
+			}
+
+			secret, err := client.Logical().Write(authLoginPath, authLoginParameters)
+			if err != nil {
+				errs = append(errs, err)
+				continue
+			}
+			token = secret.Auth.ClientToken
+			break
 		}
-		token = secret.Auth.ClientToken
+		if len(errs) >= 1 {
+			return nil, multierror.Append(errs[0], errs[1:]...)
+		}
 	}
 	if token != "" {
 		client.SetToken(token)

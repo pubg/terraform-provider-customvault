@@ -328,3 +328,17 @@ func PathParameters(endpoint, vaultPath string) (map[string]string, error) {
 	}
 	return result, nil
 }
+
+func ReplaceEnvVar(param map[string]interface{}, prefix string) {
+	for key, rawValue := range param {
+		switch rawValue.(type) {
+		case string:
+			value := rawValue.(string)
+			if strings.HasPrefix(value, prefix) {
+				 param[key] = os.Getenv(value[len(prefix):])
+			}
+		case map[string]interface{}:
+			ReplaceEnvVar(rawValue.(map[string]interface{}), prefix)
+		}
+	}
+}

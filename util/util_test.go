@@ -3,6 +3,7 @@ package util
 import (
 	"fmt"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"os"
 	"reflect"
 	"testing"
 )
@@ -250,6 +251,85 @@ func TestPathParameters(t *testing.T) {
 			}
 			if !reflect.DeepEqual(result, testCase.expected) {
 				t.Fatalf("expected %+v but received %+v", testCase.expected, result)
+			}
+		})
+	}
+}
+
+func TestReplaceEnvVar(t *testing.T) {
+	testCases := []struct {
+		name              string
+		osEnvVar          map[string]string
+		providedPrameter  map[string]interface{}
+		expectedParameter map[string]interface{}
+	}{
+		{
+			name: "EnvReplaceTest",
+			osEnvVar: map[string]string{
+				"APPROLE_SECRET": "Lb?CYh~~3%Xk_",
+			},
+			providedPrameter: map[string]interface{}{
+				"role_id":     "myroleid",
+				"role_secret": "env.APPROLE_SECRET",
+			},
+			expectedParameter: map[string]interface{}{
+				"role_id":     "myroleid",
+				"role_secret": "Lb?CYh~~3%Xk_",
+			},
+		},
+		{
+			name: "EnvReplaceTestReuseEnvTest",
+			osEnvVar: map[string]string{
+			},
+			providedPrameter: map[string]interface{}{
+				"role_id":     "myroleid",
+				"role_secret": "env.APPROLE_SECRET",
+			},
+			expectedParameter: map[string]interface{}{
+				"role_id":     "myroleid",
+				"role_secret": "",
+			},
+		},
+		{
+			name: "NestedMapTest",
+			osEnvVar: map[string]string{
+				"APPROLE_SECRET": "Z3dhd2d3YWdod2F3aGhhdw",
+				"MY_NAMESPACE": "admin-ns",
+			},
+			providedPrameter: map[string]interface{}{
+				"role_id":     "myroleid",
+				"role_secret": "env.APPROLE_SECRET",
+				"nested": map[string]interface{}{
+					"ns": "env.MY_NAMESPACE",
+				},
+			},
+			expectedParameter: map[string]interface{}{
+				"role_id":     "myroleid",
+				"role_secret": "Z3dhd2d3YWdod2F3aGhhdw",
+				"nested": map[string]interface{}{
+					"ns": "admin-ns",
+				},
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			for key, value := range testCase.osEnvVar {
+				if current, exists := os.LookupEnv(key); exists {
+					defer func() {
+						os.Setenv(key, current)
+					}()
+				}else{
+					defer func() {
+						os.Unsetenv(key)
+					}()
+				}
+				os.Setenv(key, value)
+			}
+			ReplaceEnvVar(testCase.providedPrameter, "env.")
+			if !reflect.DeepEqual(testCase.providedPrameter, testCase.expectedParameter) {
+				t.Fatalf("expected %+v but received %+v", testCase.expectedParameter, testCase.providedPrameter)
 			}
 		})
 	}
