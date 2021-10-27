@@ -105,9 +105,9 @@ func Provider() *schema.Provider {
 							},
 						},
 						"replace_env": {
-							Type: schema.TypeBool,
+							Type:     schema.TypeBool,
 							Optional: true,
-							Default: false,
+							Default:  false,
 						},
 						"method": {
 							Type:     schema.TypeString,
@@ -222,10 +222,13 @@ var (
 			Resource:      tencentAccessCredentialsDataSource(),
 			PathInventory: []string{"/tencentsecrets/creds"},
 		},
+		"client_config": {
+			Resource:      clientConfigDataSource(),
+			PathInventory: []string{"/auth/token"},
+		},
 	}
 
-	ResourceRegistry = map[string]*Description{
-	}
+	ResourceRegistry = map[string]*Description{}
 )
 
 func providerToken(d *schema.ResourceData) (string, error) {
