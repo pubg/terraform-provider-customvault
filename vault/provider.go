@@ -3,11 +3,12 @@ package vault
 import (
 	"errors"
 	"fmt"
-	"github.com/hashicorp/terraform-provider-vault/util"
 	"log"
 	"net/http"
 	"os"
 	"strings"
+
+	"github.com/hashicorp/terraform-provider-vault/util"
 
 	"github.com/hashicorp/go-multierror"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/logging"
@@ -222,7 +223,7 @@ var (
 			Resource:      tencentAccessCredentialsDataSource(),
 			PathInventory: []string{"/tencentsecrets/creds"},
 		},
-		"client_config": {
+		"customvault_client_config": {
 			Resource:      clientConfigDataSource(),
 			PathInventory: []string{"/auth/token"},
 		},
@@ -261,6 +262,61 @@ func providerToken(d *schema.ResourceData) (string, error) {
 		return "", fmt.Errorf("error getting token: %s", err)
 	}
 	return strings.TrimSpace(token), nil
+}
+
+func resolveToken(client *api.Client, d *schema.ResourceData) (string, error) {
+	// Attempt to use auth/<mount>login if 'auth_login' is provided in provider config
+	authLoginI := d.Get("auth_login").([]interface{})
+	var errs []error
+	if len(authLoginI) >= 1 {
+		for _, rawAuthLogin := range authLoginI {
+			authLogin := rawAuthLogin.(map[string]interface{})
+			authLoginPath := authLogin["path"].(string)
+			log.Printf("[DEBUG] Try resolve vault token with %s", authLoginPath)
+			authLoginNamespace := ""
+			if authLoginNamespaceI, ok := authLogin["namespace"]; ok {
+				authLoginNamespace = authLoginNamespaceI.(string)
+				client.SetNamespace(authLoginNamespace)
+			}
+			authLoginParameters := authLogin["parameters"].(map[string]interface{})
+
+			if authLogin["replace_env"].(bool) {
+				util.ReplaceEnvVar(authLoginParameters, "env.")
+			}
+
+			method := authLogin["method"].(string)
+			if method == "aws" {
+				if err := signAWSLogin(authLoginParameters); err != nil {
+					log.Printf("[DEBUG] Resolve failed, skip and try to next auth method %+v", err.Error())
+					errs = append(errs, fmt.Errorf("error signing AWS login request: %s", err))
+					continue
+				}
+			}
+
+			secret, err := client.Logical().Write(authLoginPath, authLoginParameters)
+			if err != nil {
+				log.Printf("[DEBUG] Resolve failed, skip and try to next auth method %+v", err.Error())
+				errs = append(errs, err)
+				continue
+			}
+			return secret.Auth.ClientToken, nil
+		}
+	}
+
+	log.Printf("[DEBUG] Try resolve static token")
+	// Try an get the token from the config or token helper
+	token, err := providerToken(d)
+	if err != nil {
+		log.Printf("[DEBUG] Static token resolve failed %+v", err.Error())
+		return "", multierror.Append(err, errs...)
+	}
+	if token != "" {
+		return token, nil
+	}
+	if len(errs) >= 1 {
+		return "", multierror.Append(errs[0], errs[1:]...)
+	}
+	return "", nil
 }
 
 func providerConfigure(d *schema.ResourceData) (interface{}, error) {
@@ -322,50 +378,11 @@ func providerConfigure(d *schema.ResourceData) (interface{}, error) {
 
 	client.SetMaxRetries(d.Get("max_retries").(int))
 
-	// Try an get the token from the config or token helper
-	token, err := providerToken(d)
+	token, err := resolveToken(client, d)
 	if err != nil {
 		return nil, err
 	}
 
-	// Attempt to use auth/<mount>login if 'auth_login' is provided in provider config
-	authLoginI := d.Get("auth_login").([]interface{})
-	if len(authLoginI) >= 1 {
-		var errs []error
-		for _, rawAuthLogin := range authLoginI {
-			authLogin := rawAuthLogin.(map[string]interface{})
-			authLoginPath := authLogin["path"].(string)
-			authLoginNamespace := ""
-			if authLoginNamespaceI, ok := authLogin["namespace"]; ok {
-				authLoginNamespace = authLoginNamespaceI.(string)
-				client.SetNamespace(authLoginNamespace)
-			}
-			authLoginParameters := authLogin["parameters"].(map[string]interface{})
-
-			if authLogin["replace_env"].(bool) {
-				util.ReplaceEnvVar(authLoginParameters, "env.")
-			}
-
-			method := authLogin["method"].(string)
-			if method == "aws" {
-				if err := signAWSLogin(authLoginParameters); err != nil {
-					errs = append(errs, fmt.Errorf("error signing AWS login request: %s", err))
-					continue
-				}
-			}
-
-			secret, err := client.Logical().Write(authLoginPath, authLoginParameters)
-			if err != nil {
-				errs = append(errs, err)
-				continue
-			}
-			token = secret.Auth.ClientToken
-			break
-		}
-		if len(errs) >= 1 {
-			return nil, multierror.Append(errs[0], errs[1:]...)
-		}
-	}
 	if token != "" {
 		client.SetToken(token)
 	}
