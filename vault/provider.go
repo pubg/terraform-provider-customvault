@@ -223,9 +223,9 @@ var (
 			Resource:      tencentAccessCredentialsDataSource(),
 			PathInventory: []string{"/tencentsecrets/creds"},
 		},
-		"customvault_client_config": {
-			Resource:      clientConfigDataSource(),
-			PathInventory: []string{"/auth/token"},
+		"customvault_lookup_self": {
+			Resource:      lookupSelfDataSource(),
+			PathInventory: []string{"/auth/token/lookup-self"},
 		},
 	}
 
