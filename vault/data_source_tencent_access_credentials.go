@@ -111,7 +111,7 @@ func tencentAccessCredentialsDataSourceRead(d *schema.ResourceData, meta interfa
 	d.SetId(secret.LeaseID)
 	d.Set("access_key", secret.Data["secret_id"])
 	d.Set("secret_key", secret.Data["secret_key"])
-	d.Set("security_token", secret.Data["secret_token"])
+	d.Set("security_token", secret.Data["token"])
 	d.Set("lease_id", secret.LeaseID)
 	d.Set("lease_duration", secret.LeaseDuration)
 	d.Set("lease_start_time", time.Now().Format(time.RFC3339))
