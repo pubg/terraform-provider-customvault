@@ -29,8 +29,8 @@ go test ./...
 # Publish to Terraform Registry
 
 1. Tag specific git commit(like "v3.0.0") and push.
-2. Build pipeline will run and upload artifacts to Github Releases.
-3. Wait until Terraform Registry receive release create event.
+2. Github Actions pipeline will run and upload artifacts to Github Releases.
+3. Wait until Terraform Registry receive new release event.
 
 If not published a long time, Click `Resync` Button in Registry settings menu.
 
