@@ -7,7 +7,11 @@ require (
 	github.com/hashicorp/terraform-provider-vault v1.9.1-0.20220225202911-91f40a2aed19
 	github.com/hashicorp/vault v1.9.3
 	github.com/hashicorp/vault/api v1.3.2-0.20211222220726-b046cd9f80eb
+	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.0.358
+	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/sts v1.0.358
 )
+
+replace github.com/tencentcloud/tencentcloud-sdk-go v1.0.162 => github.com/tencentcloud/tencentcloud-sdk-go v1.0.358
 
 require (
 	cloud.google.com/go v0.65.0 // indirect

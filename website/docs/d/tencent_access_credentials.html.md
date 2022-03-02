@@ -11,17 +11,22 @@ Reads Tencent credentials from an Tencent secret backend in Vault.
 
 ## Example Usage
 
-```hcl
+```terraform
 # generally, these blocks would be in a different module
 data "customvault_tencent_access_credentials" "creds" {
-  backend = "tencent"
-  role    = "my-terraform-provisioner"
+  backend    = "tencent"
+  role       = "my-terraform-provisioner"
+  sts_region = "ap-seoul"
 }
 
 provider "tencentcloud" {
   access_key     = data.customvault_tencent_access_credentials.creds.access_key
   secret_key     = data.customvault_tencent_access_credentials.creds.secret_key
-  security_token = datacustomvault_tencent_access_credentials.security_token
+  security_token = data.customvault_tencent_access_credentials.creds.security_token
+}
+
+output "arn" {
+  value = data.customvault_tencent_access_credentials.creds.arn
 }
 ```
 
@@ -34,6 +39,8 @@ The following arguments are supported:
 
 * `role` - (Required) The name of the Tencent secret backend role to read credentials from, with no leading or
   trailing `/`s.
+
+* `sts_region` - (Optional) TencentCloud Region for use Credential Validation. Default is `ap-guangzhou`
 
 ## Attributes Reference
 
@@ -57,3 +64,5 @@ In addition to the arguments above, the following attributes are exported:
 * `lease_renewable` - `true` if the lease can be renewed using Vault's
   `sys/renew/{lease-id}` endpoint. Terraform does not currently support lease renewal, and so it will request a new
   lease each time this data source is refreshed.
+
+* `arn` - TencentCloud CAM Identity ARN.
