@@ -26,3 +26,8 @@ export VAULT_ADDR="my-vault-addr"
 go test ./...
 ```
 
+# Release
+
+1. Tag specific git commit(like "v3.0.0") and push.
+2. Build pipeline will run and upload artifacts to Github Releases.
+3. Wait until Terraform Registry receive release published event.
