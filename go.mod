@@ -1,4 +1,4 @@
-module github.com/pubg/terraform-provider-customvault
+module github.com/pubg/terraform-provider-customvault/v3
 
 go 1.17
 
