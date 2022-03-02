@@ -6,7 +6,7 @@ import (
 	"log"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/plugin"
-	"github.com/pubg/terraform-provider-customvault/vault"
+	"github.com/pubg/terraform-provider-customvault/v3/vault"
 )
 
 func main() {
